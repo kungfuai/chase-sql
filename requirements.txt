@@ -1,1 +1,3 @@
 numpy
+google-generativeai
+python-dotenv

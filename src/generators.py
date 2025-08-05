@@ -742,3 +742,32 @@ class OnlineSyntheticGenerator(BaseCandidateGenerator):
         confidence += len(pattern_examples) * 0.03
         
         return min(confidence, 1.0)
+
+
+class LLMGenerator(BaseCandidateGenerator):
+    """Generator using LLM (Gemini) for SQL generation."""
+    
+    def __init__(self, db_path: str, knowledge_base: QueryKnowledgeBase):
+        super().__init__(db_path, knowledge_base)
+        from llm_client import GeminiClient
+        self.llm_client = GeminiClient()
+    
+    def generate_candidate(self, question: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+        """Generate SQL candidate using LLM."""
+        
+        if not self.llm_client.is_available():
+            raise Exception("LLM client not available")
+        
+        sql = self.llm_client.generate_sql(question, schema)
+        if not sql:
+            raise Exception("Failed to generate SQL with LLM")
+        
+        return {
+            'sql': sql,
+            'confidence': 0.85,  # High confidence for LLM
+            'reasoning': {
+                'approach': 'llm',
+                'method': 'Gemini API text-to-SQL generation',
+                'features': ['natural_language_understanding', 'pattern_recognition']
+            }
+        }

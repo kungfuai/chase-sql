@@ -8,7 +8,8 @@ import time
 from database import ECommerceDB
 from knowledge_base import QueryKnowledgeBase
 from value_retrieval import ValueRetrieval
-from generators import DivideConquerGenerator, QueryPlanGenerator, OnlineSyntheticGenerator
+from generators import DivideConquerGenerator, QueryPlanGenerator, OnlineSyntheticGenerator, LLMGenerator
+from config import Config
 from query_fixer import QueryFixer
 from selection_agent import SelectionAgent
 
@@ -33,6 +34,13 @@ class ChaseSQL:
             'query_plan': QueryPlanGenerator(db_path, self.knowledge_base),
             'synthetic': OnlineSyntheticGenerator(db_path, self.knowledge_base)
         }
+        
+        # Add LLM generator if available
+        if Config.is_llm_enabled():
+            try:
+                self.generators['llm'] = LLMGenerator(db_path, self.knowledge_base)
+            except Exception:
+                pass  # LLM not available, continue with rule-based generators
         
         # Initialize fixer and selector
         self.query_fixer = QueryFixer(db_path)
