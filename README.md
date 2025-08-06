@@ -194,21 +194,6 @@ Uses pairwise comparison to select the best candidate:
 - Considers query-question alignment
 - Tournament-style scoring
 
-## 📊 Performance Metrics
-
-Based on our test suite with the mock e-commerce database:
-
-| Query Complexity | Success Rate | Average Time |
-|-----------------|--------------|--------------|
-| Simple (COUNT, SELECT) | ~95% | 0.1-0.2s |
-| Moderate (JOIN, GROUP BY) | ~80% | 0.2-0.4s |
-| Complex (Multiple JOINs, Subqueries) | ~60% | 0.3-0.6s |
-
-### Generator Performance
-
-- **Divide & Conquer**: Excels at complex, multi-part questions
-- **Query Plan**: Best for JOIN-intensive queries
-- **Synthetic Examples**: Consistent general performance
 
 ## 🗄️ Database Schema
 
@@ -221,6 +206,33 @@ orders (id, customer_id, order_date, total_amount, status)
 order_items (id, order_id, product_id, quantity, unit_price)
 reviews (id, product_id, customer_id, rating, review_text, date)
 ```
+
+### Stats About Mock Dataset
+
+**Schema Complexity: MODERATE**
+- 5 interconnected tables with proper foreign key relationships
+- Mix of data types (INTEGER, TEXT, DECIMAL, DATE)
+- Built-in constraints and referential integrity
+
+**Data Scale: LOW-MODERATE**
+- 10 customers, 15 products (4 categories)
+- 50 orders with 1-5 items each
+- 100 product reviews
+
+**Query Complexity Support:**
+- ✅ **Basic**: Simple SELECT, WHERE, COUNT queries
+- ✅ **Intermediate**: JOINs, GROUP BY, aggregations (SUM, AVG, etc.)
+- ✅ **Advanced**: Multi-table JOINs, subqueries, HAVING clauses
+- ❌ **Complex**: Window functions, CTEs, recursive queries
+- ❌ **Performance Testing**: Limited by small dataset size
+
+**Supported Query Patterns:**
+- Simple filtering and counting
+- Category-based aggregations
+- Customer spending analysis
+- Product popularity and ratings
+- Order history and status tracking
+- Cross-table relationship queries (customers ↔ orders ↔ products)
 
 ## 🧪 Testing
 

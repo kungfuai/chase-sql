@@ -33,9 +33,9 @@ This document tracks the alignment between our current implementation and the or
 **Impact**: Better candidate selection accuracy
 
 **Tasks**:
-- [ ] Collect preference data (human or model-based rankings)
-- [ ] Train selection model on preference pairs
-- [ ] Implement neural selection agent
+- [ ] Collect preference data (Paper uses 3.8K pairwise comparison samples from BIRD training dataset)
+- [ ] Train selection model on preference pairs (Fine-tuned for 10 epochs using LoRA with rank 16)
+- [ ] Implement neural selection agent (Achieves 71.01% binary classification accuracy vs 58.01% untrained)
 - [ ] Add confidence scoring for selection decisions
 - [ ] Benchmark against rule-based selection
 
@@ -72,6 +72,7 @@ This document tracks the alignment between our current implementation and the or
 **Impact**: Comparison to state-of-the-art systems
 
 **Tasks**:
+- [ ] Create multi-tier mock datasets (simple + complex) for progressive evaluation
 - [ ] Implement Spider dataset evaluation
 - [ ] Add WikiSQL benchmark support
 - [ ] Create execution accuracy metrics
