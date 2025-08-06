@@ -5,13 +5,28 @@ Implements the complete text-to-SQL pipeline from the paper.
 
 from typing import List, Dict, Any, Optional
 import time
+import logging
+import traceback
+from datetime import datetime
 from database import ECommerceDB
 from knowledge_base import QueryKnowledgeBase
 from value_retrieval import ValueRetrieval
 from generators import DivideConquerGenerator, QueryPlanGenerator, OnlineSyntheticGenerator, LLMGenerator
 from config import Config
 from query_fixer import QueryFixer
+from query_explainer import QueryExplainer
 from selection_agent import SelectionAgent
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('chase_sql_errors.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 class ChaseSQL:
     """
@@ -42,8 +57,9 @@ class ChaseSQL:
             except Exception:
                 pass  # LLM not available, continue with rule-based generators
         
-        # Initialize fixer and selector
+        # Initialize fixer, explainer and selector
         self.query_fixer = QueryFixer(db_path)
+        self.query_explainer = QueryExplainer()
         self.selection_agent = SelectionAgent(db_path)
         
         # Statistics
@@ -118,9 +134,22 @@ class ChaseSQL:
             print(f"Selected candidate from {selection_result['selection_details']['reasoning']}")
             print(f"\nFinal SQL: {best_candidate['sql']}")
         
-        # Step 5: Execute Final Query
+        # Step 5: Explain Query
         if verbose:
-            print("\nStep 5: Query Execution")
+            print("\nStep 5: Query Explanation")
+            print("-" * 30)
+        
+        explanation = self.query_explainer.explain_query(best_candidate['sql'], question)
+        
+        if verbose:
+            print("\nAnnotated SQL:")
+            print(explanation['annotated_sql'])
+            print("\nPlain English Explanation:")
+            print(explanation['plain_explanation'])
+        
+        # Step 6: Execute Final Query
+        if verbose:
+            print("\nStep 6: Query Execution")
             print("-" * 30)
         
         execution_result = self._execute_query(best_candidate['sql'])
@@ -147,6 +176,7 @@ class ChaseSQL:
         result = {
             'question': question,
             'sql': best_candidate['sql'],
+            'explanation': explanation,
             'execution_result': execution_result,
             'process_details': {
                 'value_retrieval': relevant_values,
@@ -185,6 +215,13 @@ class ChaseSQL:
                     print(f" ✓ (confidence: {candidate.get('confidence', 0):.2f})")
                     
             except Exception as e:
+                # Log full error details
+                error_msg = f"Generator '{name}' failed for question: '{question}'"
+                logger.error(error_msg)
+                logger.error(f"Error type: {type(e).__name__}")
+                logger.error(f"Error message: {str(e)}")
+                logger.error(f"Stack trace:\n{traceback.format_exc()}")
+                
                 if verbose:
                     print(f" ✗ (error: {str(e)[:50]}...)")
         
@@ -197,40 +234,51 @@ class ChaseSQL:
         fixed_candidates = []
         
         for candidate in candidates:
-            # Test original query
-            test_result = self._execute_query(candidate['sql'])
-            
-            if test_result['success'] and test_result['row_count'] > 0:
-                # Query works fine
-                candidate['fixed'] = False
-                fixed_candidates.append(candidate)
-            else:
-                # Try to fix
-                if verbose:
-                    print(f"  Fixing {candidate['generator']} candidate...", end='')
+            try:
+                # Test original query
+                test_result = self._execute_query(candidate['sql'])
                 
-                fix_result = self.query_fixer.fix_query(
-                    candidate['sql'], 
-                    question,
-                    test_result.get('error')
-                )
-                
-                if fix_result['success']:
-                    candidate['sql'] = fix_result['fixed_query']
-                    candidate['fixed'] = True
-                    candidate['fix_attempts'] = len(fix_result['attempts'])
-                    fixed_candidates.append(candidate)
-                    
-                    if verbose:
-                        print(" ✓")
-                else:
-                    # Keep original even if fix failed
+                if test_result['success'] and test_result['row_count'] > 0:
+                    # Query works fine
                     candidate['fixed'] = False
-                    candidate['fix_failed'] = True
                     fixed_candidates.append(candidate)
-                    
+                else:
+                    # Try to fix
                     if verbose:
-                        print(" ✗")
+                        print(f"  Fixing {candidate['generator']} candidate...", end='')
+                    
+                    fix_result = self.query_fixer.fix_query(
+                        candidate['sql'], 
+                        question,
+                        test_result.get('error')
+                    )
+                    
+                    if fix_result['success']:
+                        candidate['sql'] = fix_result['fixed_query']
+                        candidate['fixed'] = True
+                        candidate['fix_attempts'] = len(fix_result['attempts'])
+                        fixed_candidates.append(candidate)
+                        
+                        if verbose:
+                            print(" ✓")
+                    else:
+                        # Keep original even if fix failed
+                        candidate['fixed'] = False
+                        candidate['fix_failed'] = True
+                        fixed_candidates.append(candidate)
+                        logger.warning(f"Failed to fix query from {candidate['generator']}: {candidate['sql']}")
+                        
+                        if verbose:
+                            print(" ✗")
+            except Exception as e:
+                logger.error(f"Error during query fixing for {candidate['generator']}: {str(e)}")
+                logger.error(f"Stack trace:\n{traceback.format_exc()}")
+                # Still add the candidate even if fixing failed
+                candidate['fixed'] = False
+                candidate['fix_error'] = str(e)
+                fixed_candidates.append(candidate)
+                if verbose:
+                    print(f" ✗ (error during fixing)")
         
         return fixed_candidates
     
@@ -245,6 +293,8 @@ class ChaseSQL:
                 'error': None
             }
         except Exception as e:
+            logger.warning(f"Query execution failed: {sql}")
+            logger.warning(f"Error: {str(e)}")
             return {
                 'success': False,
                 'results': None,

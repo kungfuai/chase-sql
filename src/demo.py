@@ -4,7 +4,20 @@ Run this to see the system in action with various example questions.
 """
 
 import sys
+import logging
+import traceback
 from chase_sql import ChaseSQL
+
+# Configure logging for demo
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('demo_errors.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 def print_header():
     """Print demo header."""
@@ -64,6 +77,10 @@ def run_interactive_demo():
             print("\n\nExiting...")
             break
         except Exception as e:
+            logger.error(f"Error processing question: '{question}'")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error message: {str(e)}")
+            logger.error(f"Stack trace:\n{traceback.format_exc()}")
             print(f"\nError: {str(e)}")
             print("Please try another question.")
 

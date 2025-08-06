@@ -1404,14 +1404,32 @@ class LLMGenerator(BaseCandidateGenerator):
         from llm_client import GeminiClient
         self.llm_client = GeminiClient()
     
-    def generate_candidate(self, question: str, schema: Dict[str, Any]) -> Dict[str, Any]:
+    def generate_candidate(self, question: str, schema: str) -> Dict[str, Any]:
         """Generate SQL candidate using LLM."""
+        import logging
+        logger = logging.getLogger(__name__)
         
         if not self.llm_client.is_available():
+            logger.error("LLM client not available")
             raise Exception("LLM client not available")
         
-        sql = self.llm_client.generate_sql(question, schema)
+        # Parse schema string into a dictionary for the LLM client
+        try:
+            schema_dict = self._parse_schema_string(schema)
+            logger.debug(f"Parsed schema: {schema_dict}")
+        except Exception as e:
+            logger.error(f"Failed to parse schema: {str(e)}")
+            raise
+        
+        try:
+            sql = self.llm_client.generate_sql(question, schema_dict)
+            logger.debug(f"LLM generated SQL: {sql}")
+        except Exception as e:
+            logger.error(f"LLM generate_sql failed: {str(e)}")
+            raise Exception(f"LLM generation failed: {str(e)}")
+        
         if not sql:
+            logger.error("LLM returned None or empty SQL")
             raise Exception("Failed to generate SQL with LLM")
         
         return {
@@ -1423,3 +1441,21 @@ class LLMGenerator(BaseCandidateGenerator):
                 'features': ['natural_language_understanding', 'pattern_recognition']
             }
         }
+    
+    def _parse_schema_string(self, schema: str) -> Dict[str, Any]:
+        """Parse schema string into dictionary format expected by LLM client."""
+        schema_dict = {}
+        lines = schema.strip().split('\n')
+        current_table = None
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('Table:'):
+                current_table = line.replace('Table:', '').strip()
+                schema_dict[current_table] = {'columns': []}
+            elif current_table and ':' in line and not line.startswith('Table:'):
+                # Extract column name (before the colon)
+                column_name = line.split(':')[0].strip()
+                schema_dict[current_table]['columns'].append(column_name)
+        
+        return schema_dict
